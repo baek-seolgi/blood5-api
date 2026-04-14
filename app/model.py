@@ -3,7 +3,8 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-MODEL_PATH = Path.home() / 'Desktop' / 'mimic-iv' / 'blood5' / 'final_models.pkl'
+# Railway 환경과 로컬 환경 모두 대응
+MODEL_PATH = Path(__file__).parent.parent / 'final_models.pkl'
 
 FEATURE_COLS = [
     'creatinine_0h', 'glucose_0h', 'hemoglobin_0h', 'lactate_0h',
