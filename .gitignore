@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.pkl
+*.csv
+*.gz
+.DS_Store
+mimic_env/

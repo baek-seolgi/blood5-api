@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>혈액검사 악화 예측</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@300;400;500&display=swap');
+
+  :root {
+    --bg: #0a0e14;
+    --surface: #111720;
+    --border: #1e2a38;
+    --accent: #00d4ff;
+    --accent2: #ff4757;
+    --warn: #ffa502;
+    --ok: #2ed573;
+    --text: #c8d6e5;
+    --muted: #4a6080;
+    --font-mono: 'IBM Plex Mono', monospace;
+    --font-sans: 'IBM Plex Sans KR', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    min-height: 100vh;
+    padding: 2rem;
+  }
+
+  .grid-bg {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  .container { max-width: 1100px; margin: 0 auto; position: relative; z-index: 1; }
+
+  header { margin-bottom: 3rem; }
+  .tag {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 0.75rem;
+  }
+  h1 {
+    font-size: 2rem;
+    font-weight: 300;
+    letter-spacing: -0.5px;
+    line-height: 1.2;
+  }
+  h1 span { color: var(--accent); font-weight: 500; }
+  .subtitle { color: var(--muted); font-size: 0.9rem; margin-top: 0.5rem; }
+
+  .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 1.75rem;
+  }
+
+  .panel-title {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .field { margin-bottom: 1.1rem; }
+  label {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 0.4rem;
+    letter-spacing: 1px;
+  }
+  .field-row { display: flex; align-items: center; gap: 0.5rem; }
+  .field-row input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    padding: 0.6rem 0.8rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .field-row input:focus { border-color: var(--accent); }
+  .field-row input::placeholder { color: var(--muted); font-size: 12px; }
+  .unit {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    min-width: 55px;
+    text-align: right;
+  }
+  .normal {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: #2a3f55;
+    min-width: 75px;
+    text-align: right;
+  }
+
+  .btn {
+    width: 100%;
+    margin-top: 1.5rem;
+    padding: 0.9rem;
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+  .btn:hover { background: var(--accent); color: var(--bg); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* 결과 패널 */
+  .result-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    gap: 1rem;
+    min-height: 300px;
+  }
+  .result-empty .icon { font-size: 2rem; opacity: 0.3; }
+
+  .result-item { margin-bottom: 1.4rem; }
+  .result-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+  .result-name {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text);
+  }
+  .result-pct {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .bar-track {
+    height: 4px;
+    background: var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    width: 0%;
+  }
+
+  .warn-badge {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    padding: 2px 8px;
+    margin-left: 8px;
+    letter-spacing: 1px;
+  }
+
+  .warnings-box {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    border: 1px solid var(--border);
+    background: rgba(255,71,87,0.05);
+  }
+  .warnings-title {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--accent2);
+    letter-spacing: 2px;
+    margin-bottom: 0.5rem;
+  }
+  .warning-item {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--accent2);
+    padding: 3px 0;
+  }
+  .warning-item::before { content: "⚠ "; }
+
+  .note-box {
+    margin-top: 1rem;
+    padding: 0.75rem 1rem;
+    border-left: 2px solid var(--warn);
+    font-size: 12px;
+    color: var(--warn);
+    font-family: var(--font-mono);
+  }
+
+  .loading {
+    display: none;
+    text-align: center;
+    padding: 2rem;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--accent);
+    letter-spacing: 2px;
+  }
+  .loading.active { display: block; }
+
+  .error-box {
+    padding: 1rem;
+    border: 1px solid var(--accent2);
+    color: var(--accent2);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    display: none;
+  }
+  .error-box.active { display: block; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+  .loading.active { animation: pulse 1.2s infinite; }
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div class="container">
+  <header>
+    <div class="tag">MIMIC-IV · XGBoost · 5-Model Ensemble</div>
+    <h1>혈액검사 기반<br><span>6시간 후 악화 예측</span></h1>
+    <p class="subtitle">응급실 초기 혈액검사 수치를 입력하면 6시간 후 주요 수치의 악화 확률을 예측합니다.</p>
+  </header>
+
+  <div class="layout">
+    <!-- 입력 패널 -->
+    <div class="panel">
+      <div class="panel-title">// 초기 혈액검사 수치 입력 (0~3h)</div>
+
+      <div class="field">
+        <label>WBC</label>
+        <div class="field-row">
+          <input type="number" id="wbc_0h" placeholder="예: 8.5" step="0.1">
+          <span class="unit">K/uL</span>
+          <span class="normal">4~11</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>HEMOGLOBIN</label>
+        <div class="field-row">
+          <input type="number" id="hemoglobin_0h" placeholder="예: 13.5" step="0.1">
+          <span class="unit">g/dL</span>
+          <span class="normal">12~17</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>PLATELET</label>
+        <div class="field-row">
+          <input type="number" id="platelet_0h" placeholder="예: 220" step="1">
+          <span class="unit">K/uL</span>
+          <span class="normal">150~400</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>CREATININE</label>
+        <div class="field-row">
+          <input type="number" id="creatinine_0h" placeholder="예: 1.0" step="0.01">
+          <span class="unit">mg/dL</span>
+          <span class="normal">0.6~1.2</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>SODIUM</label>
+        <div class="field-row">
+          <input type="number" id="sodium_0h" placeholder="예: 140" step="1">
+          <span class="unit">mEq/L</span>
+          <span class="normal">136~145</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>POTASSIUM</label>
+        <div class="field-row">
+          <input type="number" id="potassium_0h" placeholder="예: 4.0" step="0.1">
+          <span class="unit">mEq/L</span>
+          <span class="normal">3.5~5.0</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>GLUCOSE</label>
+        <div class="field-row">
+          <input type="number" id="glucose_0h" placeholder="예: 95" step="1">
+          <span class="unit">mg/dL</span>
+          <span class="normal">70~100</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>LACTATE</label>
+        <div class="field-row">
+          <input type="number" id="lactate_0h" placeholder="미측정 시 비워두세요" step="0.1">
+          <span class="unit">mmol/L</span>
+          <span class="normal">0.5~2.0</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>TROPONIN T</label>
+        <div class="field-row">
+          <input type="number" id="troponin_t_0h" placeholder="미측정 시 비워두세요" step="0.001">
+          <span class="unit">ng/mL</span>
+          <span class="normal">&lt;0.014</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>BNP</label>
+        <div class="field-row">
+          <input type="number" id="bnp_0h" placeholder="미측정 시 비워두세요" step="1">
+          <span class="unit">pg/mL</span>
+          <span class="normal">&lt;100</span>
+        </div>
+      </div>
+
+      <button class="btn" onclick="runPrediction()">PREDICT →</button>
+    </div>
+
+    <!-- 결과 패널 -->
+    <div class="panel" id="result-panel">
+      <div class="panel-title">// 6시간 후 악화 예측 확률</div>
+
+      <div class="result-empty" id="empty-state">
+        <div class="icon">◈</div>
+        <div>수치를 입력하고 PREDICT를 실행하세요</div>
+      </div>
+
+      <div class="loading" id="loading">ANALYZING ···</div>
+      <div class="error-box" id="error-box"></div>
+
+      <div id="results" style="display:none;">
+        <div class="result-item" id="res-hemoglobin"></div>
+        <div class="result-item" id="res-creatinine"></div>
+        <div class="result-item" id="res-potassium"></div>
+        <div class="result-item" id="res-lactate"></div>
+        <div class="result-item" id="res-troponin"></div>
+        <div id="warnings-container"></div>
+        <div id="note-container"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const LABELS = [
+  { key: 'hemoglobin_down', name: 'Hemoglobin 감소', id: 'res-hemoglobin' },
+  { key: 'creatinine_up',   name: 'Creatinine 증가', id: 'res-creatinine' },
+  { key: 'potassium_worse', name: 'Potassium 악화',  id: 'res-potassium'  },
+  { key: 'lactate_up',      name: 'Lactate 증가',    id: 'res-lactate'    },
+  { key: 'troponin_up',     name: 'Troponin T 상승', id: 'res-troponin'   },
+];
+
+function getVal(id) {
+  const v = document.getElementById(id).value;
+  return v === '' ? null : parseFloat(v);
+}
+
+function getColor(pct) {
+  if (pct >= 0.7) return '#ff4757';
+  if (pct >= 0.5) return '#ffa502';
+  if (pct >= 0.3) return '#00d4ff';
+  return '#2ed573';
+}
+
+function renderResult(data) {
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('loading').classList.remove('active');
+  document.getElementById('results').style.display = 'block';
+
+  LABELS.forEach(label => {
+    const pct   = data[label.key];
+    const color = getColor(pct);
+    const isWarn = pct >= 0.5;
+    const el    = document.getElementById(label.id);
+
+    el.innerHTML = `
+      <div class="result-label">
+        <span class="result-name">${label.name}
+          ${isWarn ? `<span class="warn-badge" style="background:rgba(255,71,87,0.15);color:#ff4757;">⚠ 위험</span>` : ''}
+        </span>
+        <span class="result-pct" style="color:${color}">${(pct * 100).toFixed(1)}%</span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill" id="bar-${label.key}" style="background:${color}"></div>
+      </div>
+    `;
+  });
+
+  // 바 애니메이션
+  setTimeout(() => {
+    LABELS.forEach(label => {
+      const el = document.getElementById(`bar-${label.key}`);
+      if (el) el.style.width = (data[label.key] * 100) + '%';
+    });
+  }, 50);
+
+  // 경고 목록
+  const warnContainer = document.getElementById('warnings-container');
+  if (data.warnings && data.warnings.length > 0) {
+    warnContainer.innerHTML = `
+      <div class="warnings-box">
+        <div class="warnings-title">// 위험 항목</div>
+        ${data.warnings.map(w => `<div class="warning-item">${w}</div>`).join('')}
+      </div>
+    `;
+  } else {
+    warnContainer.innerHTML = '';
+  }
+
+  // Troponin 미측정 안내
+  const noteContainer = document.getElementById('note-container');
+  if (data.troponin_note) {
+    noteContainer.innerHTML = `<div class="note-box">${data.troponin_note}</div>`;
+  } else {
+    noteContainer.innerHTML = '';
+  }
+}
+
+async function runPrediction() {
+  const btn = document.querySelector('.btn');
+  btn.disabled = true;
+
+  document.getElementById('empty-state').style.display  = 'none';
+  document.getElementById('results').style.display      = 'none';
+  document.getElementById('error-box').classList.remove('active');
+  document.getElementById('loading').classList.add('active');
+
+  const payload = {
+    wbc_0h:         getVal('wbc_0h'),
+    hemoglobin_0h:  getVal('hemoglobin_0h'),
+    platelet_0h:    getVal('platelet_0h'),
+    creatinine_0h:  getVal('creatinine_0h'),
+    sodium_0h:      getVal('sodium_0h'),
+    potassium_0h:   getVal('potassium_0h'),
+    glucose_0h:     getVal('glucose_0h'),
+    lactate_0h:     getVal('lactate_0h'),
+    troponin_t_0h:  getVal('troponin_t_0h'),
+    bnp_0h:         getVal('bnp_0h'),
+  };
+
+  try {
+    const res = await fetch('http://localhost:8000/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    renderResult(data);
+  } catch (e) {
+    document.getElementById('loading').classList.remove('active');
+    const errBox = document.getElementById('error-box');
+    errBox.textContent = `서버 연결 실패: ${e.message}\nuvicorn이 실행 중인지 확인하세요.`;
+    errBox.classList.add('active');
+    document.getElementById('empty-state').style.display = 'flex';
+  } finally {
+    btn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>
